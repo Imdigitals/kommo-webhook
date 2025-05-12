@@ -30,16 +30,16 @@ function verifySignature(body, sig) {
   return expected === sig
 }
 
-// Función para enviar eventos a Google Analytics 4 (Measurement Protocol)
+// Envía evento a Google Analytics 4 vía Measurement Protocol
 async function sendToGA4(eventName, custom_data, clientId) {
   const url =
     `https://www.google-analytics.com/mp/collect?measurement_id=${GA_MEASUREMENT_ID}` +
     `&api_secret=${GA_API_SECRET}`
   const payload = {
-    client_id: clientId || '555.555', // Fallback si no existe client_id
+    client_id: clientId || '555.555',
     events: [
       {
-        name: eventName.toLowerCase(), // 'lead' o 'purchase'
+        name: eventName.toLowerCase(),
         params: {
           value: custom_data.value || 0,
           currency: custom_data.currency || 'USD'
@@ -55,7 +55,7 @@ async function sendToGA4(eventName, custom_data, clientId) {
   }
 }
 
-// Ruta de recepción del webhook de Kommo
+// Ruta de recepción de webhook de Kommo
 app.post('/api/webhook/kommo', async (req, res) => {
   const sig = req.get('X-Hub-Signature') || ''
   if (!verifySignature(req.body, sig)) {
@@ -69,22 +69,33 @@ app.post('/api/webhook/kommo', async (req, res) => {
     return res.status(200).send('Ignored event')
   }
 
-  // Construye user_data y custom_data
+  // Encriptar user_data para Meta CAPI
   const user_data = {}
-  if (contact.email) user_data.em = [contact.email]
-  if (contact.phone) user_data.ph = [contact.phone]
+  if (contact.email) {
+    const email = contact.email.trim().toLowerCase()
+    const hashedEmail = crypto.createHash('sha256').update(email).digest('hex')
+    user_data.em = [hashedEmail]
+  }
+  if (contact.phone) {
+    const digits = contact.phone.replace(/\D+/g, '')
+    const hashedPhone = crypto.createHash('sha256').update(digits).digest('hex')
+    user_data.ph = [hashedPhone]
+  }
+
+  // Construir custom_data
   const custom_data = {}
   if (custom_fields?.amount) {
     custom_data.value = custom_fields.amount
     custom_data.currency = custom_fields.currency || 'USD'
   }
 
-  // 1) Enviar a Meta Conversions API
+  // 1) Enviar a Meta Conversions API con datos hashed
   const metaBody = {
     data: [
       {
         event_name: eventName,
         event_time: Math.floor(Date.now() / 1000),
+        event_source_url: custom_fields?.source_url || undefined,
         user_data,
         custom_data
       }
@@ -108,9 +119,9 @@ app.post('/api/webhook/kommo', async (req, res) => {
   return res.json({ success: true })
 })
 
-// Health check y ruta raíz
+// Rutas de health check y raíz
 app.get('/healthz', (req, res) => res.sendStatus(200))
 app.get('/', (req, res) => res.send('OK'))
 
-// Arranca servidor
+// Arrancar servidor
 app.listen(port, () => console.log(`✅ Servidor escuchando en el puerto ${port}`))
