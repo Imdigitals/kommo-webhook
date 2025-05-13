@@ -2,7 +2,8 @@ import express from 'express'
 import bodyParser from 'body-parser'
 import axios from 'axios'
 import crypto from 'crypto'
-import { Low, JSONFile } from 'lowdb'
+import { Low } from 'lowdb'
+import { JSONFile } from 'lowdb/node'   // <— ruta corregida para JSONFile
 
 const app = express()
 app.use(bodyParser.json())
@@ -44,14 +45,17 @@ function verifySignature(body, sig) {
 async function sendToMeta(eventName, user_data, custom_data) {
   const metaBody = {
     data: [{
-      event_name:   eventName,
-      event_time:   Math.floor(Date.now() / 1000),
+      event_name: eventName,
+      event_time: Math.floor(Date.now() / 1000),
       user_data,
       custom_data
     }],
     access_token: META_ACCESS_TOKEN
   }
-  return axios.post(`https://graph.facebook.com/v15.0/${META_PIXEL_ID}/events`, metaBody)
+  return axios.post(
+    `https://graph.facebook.com/v15.0/${META_PIXEL_ID}/events`,
+    metaBody
+  )
 }
 
 // Envía evento a GA4 vía Measurement Protocol
@@ -64,7 +68,7 @@ async function sendToGA4(eventName, custom_data, clientId) {
     events: [{
       name: eventName.toLowerCase(),
       params: {
-        value:    custom_data.value   || 0,
+        value: custom_data.value || 0,
         currency: custom_data.currency || 'USD'
       }
     }]
@@ -76,12 +80,10 @@ async function sendToGA4(eventName, custom_data, clientId) {
 app.post('/api/webhook/kommo', async (req, res) => {
   await initDb()
 
-  // Permitir desactivar via UI
   if (!db.data.config.enabled) {
     return res.status(503).send('Webhook disabled')
   }
 
-  // Validar firma
   const sig = req.get('X-Hub-Signature') || ''
   if (!verifySignature(req.body, sig)) {
     return res.status(403).send('Invalid signature')
@@ -98,11 +100,11 @@ app.post('/api/webhook/kommo', async (req, res) => {
   const user_data = {}
   if (contact.email) {
     const email = contact.email.trim().toLowerCase()
-    user_data.em = [crypto.createHash('sha256').update(email).digest('hex')]
+    user_data.em = [ crypto.createHash('sha256').update(email).digest('hex') ]
   }
   if (contact.phone) {
     const phone = contact.phone.replace(/\D+/g, '')
-    user_data.ph = [crypto.createHash('sha256').update(phone).digest('hex')]
+    user_data.ph = [ crypto.createHash('sha256').update(phone).digest('hex') ]
   }
 
   // Construir custom_data
@@ -112,7 +114,7 @@ app.post('/api/webhook/kommo', async (req, res) => {
     custom_data.currency = custom_fields.currency || 'USD'
   }
 
-  // Enviar a Meta CAPI y GA4 en paralelo
+  // Enviar a Meta CAPI y GA4
   let metaStatus = 'error', ga4Status = 'error'
   try {
     const metaResp = await sendToMeta(eventName, user_data, custom_data)
@@ -160,15 +162,11 @@ app.post('/admin/config', async (req, res) => {
 app.get('/admin', (req, res) => {
   res.send(`
 <!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Admin Kommo → Ads</title></head>
-<body>
+<html><head><meta charset="utf-8"><title>Admin Kommo → Ads</title></head><body>
   <h1>Admin Kommo → Ads</h1>
   <label>Enabled: <input type="checkbox" id="toggle"></label>
   <h2>Logs</h2>
-  <table border="1" id="tbl">
-    <tr><th>Timestamp</th><th>Type</th><th>Meta</th><th>GA4</th></tr>
-  </table>
+  <table border="1" id="tbl"><tr><th>Timestamp</th><th>Type</th><th>Meta</th><th>GA4</th></tr></table>
   <script>
     async function load(){
       const r = await fetch('/admin/logs')
@@ -176,7 +174,7 @@ app.get('/admin', (req, res) => {
       document.getElementById('toggle').checked = d.enabled
       const tbl = document.getElementById('tbl')
       tbl.innerHTML = '<tr><th>Timestamp</th><th>Type</th><th>Meta</th><th>GA4</th></tr>'
-      d.logs.forEach(l => {
+      d.logs.forEach(l=>{
         const row = tbl.insertRow()
         row.insertCell().textContent = l.timestamp
         row.insertCell().textContent = l.type
@@ -185,17 +183,16 @@ app.get('/admin', (req, res) => {
       })
     }
     document.getElementById('toggle').onchange = async e => {
-      await fetch('/admin/config', {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json' },
+      await fetch('/admin/config',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ enabled: e.target.checked })
       })
     }
     load()
-    setInterval(load, 15000)
+    setInterval(load,15000)
   </script>
-</body>
-</html>
+</body></html>
   `)
 })
 
