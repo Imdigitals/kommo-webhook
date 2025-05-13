@@ -3,17 +3,16 @@ import bodyParser from 'body-parser'
 import axios from 'axios'
 import crypto from 'crypto'
 import { Low } from 'lowdb'
-import { JSONFile } from 'lowdb/node'   // <— ruta corregida para JSONFile
+import { JSONFile } from 'lowdb/node'
 
 const app = express()
 app.use(bodyParser.json())
 
-// Inicializar DB local (lowdb) para logs y configuración
+// Inicializar DB local (lowdb) con datos por defecto
 const adapter = new JSONFile('./db.json')
-const db = new Low(adapter)
+const db = new Low(adapter, { logs: [], config: { enabled: true } })
 async function initDb() {
   await db.read()
-  db.data = db.data || { logs: [], config: { enabled: true } }
   await db.write()
 }
 
@@ -25,14 +24,12 @@ const KOMMO_SECRET      = process.env.KOMMO_WEBHOOK_SECRET
 const GA_MEASUREMENT_ID = process.env.GA_MEASUREMENT_ID
 const GA_API_SECRET     = process.env.GA_API_SECRET
 
-// Mapea eventos de Kommo a nombres de Meta CAPI y GA4
 function mapEventName(type) {
   if (type === 'lead')     return 'Lead'
   if (type === 'purchase') return 'Purchase'
   return null
 }
 
-// Verifica firma HMAC-SHA256 de Kommo
 function verifySignature(body, sig) {
   const expected = crypto
     .createHmac('sha256', KOMMO_SECRET)
@@ -41,7 +38,6 @@ function verifySignature(body, sig) {
   return expected === sig
 }
 
-// Envía evento a Meta Conversions API
 async function sendToMeta(eventName, user_data, custom_data) {
   const metaBody = {
     data: [{
@@ -58,7 +54,6 @@ async function sendToMeta(eventName, user_data, custom_data) {
   )
 }
 
-// Envía evento a GA4 vía Measurement Protocol
 async function sendToGA4(eventName, custom_data, clientId) {
   const url =
     `https://www.google-analytics.com/mp/collect?measurement_id=${GA_MEASUREMENT_ID}` +
@@ -68,7 +63,7 @@ async function sendToGA4(eventName, custom_data, clientId) {
     events: [{
       name: eventName.toLowerCase(),
       params: {
-        value: custom_data.value || 0,
+        value:    custom_data.value   || 0,
         currency: custom_data.currency || 'USD'
       }
     }]
@@ -76,7 +71,7 @@ async function sendToGA4(eventName, custom_data, clientId) {
   return axios.post(url, payload)
 }
 
-// Handler del webhook de Kommo
+// Webhook handler
 app.post('/api/webhook/kommo', async (req, res) => {
   await initDb()
 
@@ -96,25 +91,22 @@ app.post('/api/webhook/kommo', async (req, res) => {
     return res.status(200).send('Ignored event')
   }
 
-  // Construir user_data (hashed) para Meta
   const user_data = {}
   if (contact.email) {
     const email = contact.email.trim().toLowerCase()
-    user_data.em = [ crypto.createHash('sha256').update(email).digest('hex') ]
+    user_data.em = [crypto.createHash('sha256').update(email).digest('hex')]
   }
   if (contact.phone) {
     const phone = contact.phone.replace(/\D+/g, '')
-    user_data.ph = [ crypto.createHash('sha256').update(phone).digest('hex') ]
+    user_data.ph = [crypto.createHash('sha256').update(phone).digest('hex')]
   }
 
-  // Construir custom_data
   const custom_data = {}
   if (custom_fields?.amount) {
     custom_data.value    = custom_fields.amount
     custom_data.currency = custom_fields.currency || 'USD'
   }
 
-  // Enviar a Meta CAPI y GA4
   let metaStatus = 'error', ga4Status = 'error'
   try {
     const metaResp = await sendToMeta(eventName, user_data, custom_data)
@@ -133,7 +125,6 @@ app.post('/api/webhook/kommo', async (req, res) => {
     ga4Status = err.response?.status || 'error'
   }
 
-  // Guardar log
   db.data.logs.push({
     timestamp: new Date().toISOString(),
     type:      eventName,
@@ -145,7 +136,7 @@ app.post('/api/webhook/kommo', async (req, res) => {
   res.json({ success: true })
 })
 
-// Endpoints de administración
+// Admin endpoints
 app.get('/admin/logs', async (req, res) => {
   await initDb()
   res.json({ enabled: db.data.config.enabled, logs: db.data.logs.slice(-100) })
@@ -158,7 +149,6 @@ app.post('/admin/config', async (req, res) => {
   res.json({ enabled: db.data.config.enabled })
 })
 
-// UI mínima en /admin
 app.get('/admin', (req, res) => {
   res.send(`
 <!DOCTYPE html>
@@ -196,9 +186,7 @@ app.get('/admin', (req, res) => {
   `)
 })
 
-// Health check y root
 app.get('/healthz', (req, res) => res.sendStatus(200))
 app.get('/',       (req, res) => res.send('OK'))
 
-// Arrancar servidor
-app.listen(port, () => console.log(`✅ Servidor escuchando en puerto ${port}`))
+app.listen(port, () => console.log(\`✅ Servidor escuchando en puerto \${port}\`))
