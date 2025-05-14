@@ -34,10 +34,22 @@ function mapEventName(type) {
 
 // Valida firma HMAC-SHA256
 function verifySignature(body, sig) {
+  // Si faltan firma o secret, rechazamos de inmediato
+  if (!sig || !KOMMO_SECRET) return false
+
+  // body puede venir undefined: stringify a '{}' en ese caso
+  let payload
+  try {
+    payload = body ? JSON.stringify(body) : ''
+  } catch {
+    payload = ''
+  }
+
   const expected = crypto
     .createHmac('sha256', KOMMO_SECRET)
-    .update(JSON.stringify(body))
+    .update(payload)
     .digest('hex')
+
   return expected === sig
 }
 
