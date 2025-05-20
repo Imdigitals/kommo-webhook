@@ -2,8 +2,14 @@ import express from 'express'
 import bodyParser from 'body-parser'
 import axios from 'axios'
 import crypto from 'crypto'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import { Low } from 'lowdb'
 import { JSONFile } from 'lowdb/node'
+
+// __dirname setup for ESM
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 const app = express()
 app.use(bodyParser.json())
@@ -17,6 +23,11 @@ async function initDb() {
   db.data = db.data || { logs: [], config: { enabled: true } }
   await db.write()
 }
+
+// Serve the custom widget HTML
+app.get('/widget.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'widget.html'))
+})
 
 // env vars
 const port             = parseInt(process.env.PORT, 10) || 3000
@@ -119,11 +130,8 @@ async function handleEvent(type, contact, custom_fields, res) {
 
 // manual lead/purchase webhooks
 app.post('/api/webhook/manual/:evt', async (req, res) => {
-  console.log('🔔 Received manual webhook:', {
-    event: req.params.evt,
-    body:  req.body
-  })
-  const type = req.params.evt  // 'lead' o 'purchase'
+  console.log('🔔 Received manual webhook:', { event: req.params.evt, body: req.body })
+  const type = req.params.evt  // 'lead' or 'purchase'
   const { contact, custom_fields } = req.body
   await handleEvent(type, contact, custom_fields, res)
 })

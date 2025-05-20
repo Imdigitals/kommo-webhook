@@ -1,0 +1,47 @@
+<!-- widget.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>CAPI Automation Widget</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 10px; }
+    label { display: block; margin: 8px 0 4px; }
+    input, select { width: 100%; box-sizing: border-box; }
+    button { margin-top: 10px; padding: 6px 12px; }
+  </style>
+</head>
+<body>
+  <h3>CAPI Automation</h3>
+  <label>Evento:
+    <select id="evt">
+      <option value="lead">Lead</option>
+      <option value="purchase">Purchase</option>
+    </select>
+  </label>
+  <label>URL destino:</label>
+  <input id="url" type="url" placeholder="https://…">
+  <button id="save">Guardar</button>
+
+  <script>
+    // Leer/guardar en localStorage—o usa fetch a tu API si lo prefieres
+    const key = 'capi-settings';
+    const load = () => JSON.parse(localStorage.getItem(key) || '{}');
+    const save  = s=> localStorage.setItem(key, JSON.stringify(s));
+
+    // Inicializa el formulario
+    const s = load();
+    if (s.eventType) document.getElementById('evt').value = s.eventType;
+    if (s.url)       document.getElementById('url').value = s.url;
+
+    document.getElementById('save').onclick = () => {
+      const cfg = {
+        eventType: document.getElementById('evt').value,
+        url:       document.getElementById('url').value.trim()
+      };
+      save(cfg);
+      alert('Configuración guardada');
+    };
+  </script>
+</body>
+</html>
