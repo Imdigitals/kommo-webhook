@@ -119,7 +119,11 @@ async function handleEvent(type, contact, custom_fields, res) {
 
 // manual lead/purchase webhooks
 app.post('/api/webhook/manual/:evt', async (req, res) => {
-  const type = req.params.evt  // 'lead' or 'purchase'
+  console.log('🔔 Received manual webhook:', {
+    event: req.params.evt,
+    body:  req.body
+  })
+  const type = req.params.evt  // 'lead' o 'purchase'
   const { contact, custom_fields } = req.body
   await handleEvent(type, contact, custom_fields, res)
 })
